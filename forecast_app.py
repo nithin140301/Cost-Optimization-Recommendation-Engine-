@@ -1,5 +1,14 @@
-import streamlit as st
 import pandas as pd
+from prophet import Prophet
+from prophet.plot import plot_plotly
+
+def run_forecast(df, periods=90):
+    m = Prophet()
+    m.fit(df)
+    future = m.make_future_dataframe(periods=periods)
+    forecast = m.predict(future)
+    fig = plot_plotly(m, forecast)
+    return forecast, fig
 
 # Attempt to import Prophet, which is a complex external dependency
 try:

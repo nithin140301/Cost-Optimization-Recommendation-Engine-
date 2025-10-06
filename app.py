@@ -4,7 +4,9 @@ import pandas as pd
 # IMPORTANT: Import initialize_session_state to ensure state exists on startup
 from auth import login_page, show_logout_button, initialize_session_state
 from data_processor import  process_uploaded_data
-import forecast_app
+from prophet import Prophet
+from prophet.plot import plot_plotly
+
 
 from recommendations import generate_recommendations
 from anomaly_detection import run_anomaly_detection
