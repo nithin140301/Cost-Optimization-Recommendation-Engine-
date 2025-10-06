@@ -1,15 +1,15 @@
-import prophet
+import forecast_app
 import streamlit as st
 import pandas as pd
 # IMPORTANT: Import initialize_session_state to ensure state exists on startup
 from auth import login_page, show_logout_button, initialize_session_state
 from data_processor import  process_uploaded_data
-import prophet
+import forecast_app
 
 from recommendations import generate_recommendations
 from anomaly_detection import run_anomaly_detection
 from clustering import run_clustering_analysis
-from prophet import run_cost_forecasting
+from forecast_app import run_cost_forecasting
 
 # --- Page Configuration ---
 st.set_page_config(

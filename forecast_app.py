@@ -3,7 +3,7 @@ import pandas as pd
 
 # Attempt to import Prophet, which is a complex external dependency
 try:
-    from prophet import Prophet
+    from forecast_app import Prophet
     PROPHET_AVAILABLE = True
 except ImportError:
     PROPHET_AVAILABLE = False

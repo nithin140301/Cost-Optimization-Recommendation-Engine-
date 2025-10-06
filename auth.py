@@ -1,4 +1,9 @@
 import streamlit as st
+import pandas as pd
+from forecast_app import Prophet
+from prophet.plot import plot_plotly
+import plotly.graph_objects as go
+
 
 # --- Simple Hardcoded User Data (Replace with a real database like Firebase for production) ---
 USERS = {
