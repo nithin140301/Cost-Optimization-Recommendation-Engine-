@@ -1,15 +1,15 @@
-import prophet
 import streamlit as st
 import pandas as pd
 # IMPORTANT: Import initialize_session_state to ensure state exists on startup
 from auth import login_page, show_logout_button, initialize_session_state
-from data_processor import  process_uploaded_data
-import prophet
+from data_processor import process_uploaded_data
 
 from recommendations import generate_recommendations
 from anomaly_detection import run_anomaly_detection
 from clustering import run_clustering_analysis
-from prophet import run_cost_forecasting
+
+# FIX: Correctly importing run_cost_forecasting from the local 'forecast' file
+from forecast import run_cost_forecasting
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -21,9 +21,11 @@ st.set_page_config(
 def render_main_app():
     """Renders the main application interface after successful login and data upload."""
 
-    st.sidebar.header("Data Upload")
+    # Note: The data upload logic here is for the main data file (e.g., data2.csv).
+    # The forecasting tab will prompt for its specific data files (data_2022.csv, data_2023.csv).
+    st.sidebar.header("Main Data Upload (For Recommendations, Anomaly, Clustering)")
     uploaded_file = st.sidebar.file_uploader(
-        "Upload your cloud usage CSV file (data2.csv)",
+        "Upload your primary cloud usage CSV file (e.g., data2.csv)",
         type=["csv"]
     )
 
@@ -64,7 +66,8 @@ def render_main_app():
         with tab_forecast:
             st.title("Cost Forecasting")
             st.markdown("Predicting future spending to help set budgets and prevent bill shock.")
-            run_cost_forecasting(df)
+            # run_cost_forecasting handles its own file uploads internally (2022 & 2023 data)
+            run_cost_forecasting(df) 
 
         with tab_anomaly:
             st.title("Cost Anomaly Detection")
@@ -83,21 +86,19 @@ def render_main_app():
 
     else:
         # Prompt user to upload data
-        st.info("Please upload your cloud usage CSV file (`data2.csv`) in the sidebar to begin analysis.")
+        st.info("Please upload your cloud usage CSV file (e.g., `data2.csv`) in the sidebar to begin analysis.")
         # Only pop 'df' if no file is uploaded to avoid unnecessary processing after a file is removed
         st.session_state.pop('df', None)
 
 # --- Main Logic Flow ---
 def main():
     # 1. Ensure all session state variables are initialized before use.
-    # We keep the initializer for consistency, but rely on .get() below for safety.
     initialize_session_state()
 
     # 2. Display logout button (relies on initialized state)
     show_logout_button()
 
     # 3. Check the authenticated status using .get() with a default value (False).
-    # This prevents the KeyError if the key is missing on the first run.
     if st.session_state.get('logged_in', False):
         render_main_app()
     else:

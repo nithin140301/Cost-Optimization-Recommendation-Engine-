@@ -10,7 +10,8 @@ try:
     PROPHET_AVAILABLE = True
 except ImportError:
     PROPHET_AVAILABLE = False
-    st.error("Prophet library not found. Please install it using 'pip install prophet' to enable forecasting.")
+    # Only raise error in the module, let the calling function handle the UI warning
+    # st.error("Prophet library not found. Please install it using 'pip install prophet' to enable forecasting.")
 
 
 def run_cost_forecasting(df: pd.DataFrame):
@@ -68,6 +69,12 @@ def run_cost_forecasting(df: pd.DataFrame):
 
     try:
         # --- Data Preparation ---
+        # Robustly check for required columns
+        required_cols = ['Usage Start Date', 'Rounded Cost ($)']
+        if not all(col in df_train.columns for col in required_cols):
+             st.error(f"Training data is missing required columns: {', '.join(required_cols)}.")
+             return
+             
         df_train['Usage Start Date'] = pd.to_datetime(df_train['Usage Start Date'])
 
         prophet_df = df_train.copy()
@@ -109,6 +116,12 @@ def run_cost_forecasting(df: pd.DataFrame):
             try:
                 # Load the 2023 validation data from the Streamlit uploader
                 df_actual_2023 = pd.read_csv(uploaded_file_2023)
+                
+                # Check required columns for validation data
+                if not all(col in df_actual_2023.columns for col in required_cols):
+                    st.error(f"Validation data is missing required columns: {', '.join(required_cols)}.")
+                    raise ValueError("Missing columns in validation data.")
+
                 df_actual_2023['Usage Start Date'] = pd.to_datetime(df_actual_2023['Usage Start Date'])
                 
                 # Aggregate 2023 actuals by month
@@ -148,13 +161,24 @@ def run_cost_forecasting(df: pd.DataFrame):
                 st.success(f"Validation against 2023 data complete. Use the **Trend Sensitivity** slider to minimize the average **Error (\$)**.")
                 
             except Exception as e:
-                st.error(f"An error occurred while processing the 2023 validation file: {e}")
-                st.warning("Please ensure the uploaded 2023 file has the columns 'Usage Start Date' and 'Rounded Cost ($)'.")
+                # Fall-through to display forecast if validation fails
+                st.error(f"An error occurred while processing the 2023 validation file. Displaying forecast only. ({e})")
+
+                # Display forecast table without validation data
+                forecast_output = forecast_2023
+                st.dataframe(
+                    forecast_output[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].rename(
+                        columns={'ds': 'Date', 'yhat': 'Predicted Cost', 'yhat_lower': 'Lower Bound', 'yhat_upper': 'Upper Bound'}
+                    ).style.format(
+                        {'Predicted Cost': '{:,.2f}', 'Lower Bound': '{:,.2f}', 'Upper Bound': '{:,.2f}'}
+                    )
+                )
+
         
         else:
             st.warning("Please upload your **Actual 2023 Data (data_2023.csv)** using the file uploader in the sidebar to perform validation.")
             # Display forecast table without validation data
-            forecast_output = forecast.tail(12)
+            forecast_output = forecast_2023
             st.dataframe(
                 forecast_output[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].rename(
                     columns={'ds': 'Date', 'yhat': 'Predicted Cost', 'yhat_lower': 'Lower Bound', 'yhat_upper': 'Upper Bound'}
