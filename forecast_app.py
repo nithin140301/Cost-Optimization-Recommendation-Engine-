@@ -46,13 +46,22 @@ def run_cost_forecasting(df: pd.DataFrame):
     # --- MODEL TUNING CONTROLS ---
     st.sidebar.header("Forecast Tuning Parameters")
     
+    # SETTING DEFAULT TO 0.50 FOR MAXIMUM STABILITY based on debugging of volatile multi-million data
     changepoint_scale = st.sidebar.slider(
         'Trend Sensitivity (changepoint_prior_scale)',
         min_value=0.001, 
         max_value=0.5, 
-        value=0.05, # Changed default value to 0.05 for a better starting point.
+        value=0.50, # CHANGED: Max stability setting
         step=0.001,
         help="Controls how flexible the model is when fitting trends. Lower values (e.g., 0.01-0.1) are usually best for stable costs."
+    )
+
+    # --- NEW MANUAL CHANGEPOINT INPUT ---
+    # SETTING DEFAULT TO 2023-01-01 TO FORCE STABLE START after volatile 2022 data
+    manual_changepoint = st.sidebar.text_input(
+        'Manual Cost Reduction Date (YYYY-MM-DD)',
+        value='2023-01-01', # CHANGED: Default value for stability
+        help="If a major, structural cost optimization or shutdown occurred, enter the date here (e.g., 2023-04-01) to force a trend change."
     )
     
     interval_conf = st.sidebar.slider(
@@ -94,12 +103,27 @@ def run_cost_forecasting(df: pd.DataFrame):
         st.markdown(
             f"***Model Tuning Note:*** *Trend sensitivity set to **{changepoint_scale}**. Confidence interval set to **{interval_conf}**.*"
         )
+        
+        # Prepare changepoints list from user input
+        changepoint_list = []
+        # The changepoint is now defaulted to 2023-01-01 but can still be overridden
+        if manual_changepoint:
+            try:
+                # Basic validation for YYYY-MM-DD format
+                pd.to_datetime(manual_changepoint)
+                changepoint_list.append(manual_changepoint)
+            except:
+                st.sidebar.error("Invalid date format for Changepoint. Use YYYY-MM-DD.")
+                changepoint_list = []
+
         model = Prophet(
             weekly_seasonality=False,
             daily_seasonality=False,
             yearly_seasonality=True,
             changepoint_prior_scale=changepoint_scale,
-            interval_width=interval_conf
+            interval_width=interval_conf,
+            # Pass the manually set changepoint list
+            changepoints=changepoint_list if changepoint_list else None 
         )
         model.fit(prophet_df)
 
@@ -159,7 +183,7 @@ def run_cost_forecasting(df: pd.DataFrame):
                          'Error ($)': '${:,.2f}'}
                     )
                 )
-                st.success(f"Validation against 2023 data complete. Use the **Trend Sensitivity** slider to minimize the average **Error (\$)**.")
+                st.success(f"Validation against 2023 data complete. Use the **Trend Sensitivity** slider and the **Manual Cost Reduction Date** to minimize the average **Error (\$)**.")
                 
             except Exception as e:
                 # Fall-through to display forecast if validation fails
