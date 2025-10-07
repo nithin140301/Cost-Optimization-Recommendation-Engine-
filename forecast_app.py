@@ -18,12 +18,6 @@ def run_cost_forecasting(df: pd.DataFrame):
     """
     Performs cost forecasting using Facebook Prophet, provided the library is available,
     predicting total monthly cost for the next 12 months.
-    
-    FIX 1: The changepoint_prior_scale has been reduced to 0.005 to prevent the model
-    from overreacting to the steep $2M cost cut observed in December 2023.
-    
-    FIX 2: The interval_width is set to 0.95 to ensure the uncertainty bounds (yhat_lower/upper) 
-    are visible and not collapsed onto the prediction line.
     """
     if not PROPHET_AVAILABLE:
         st.warning("Cost forecasting requires the 'prophet' library, which is not currently installed or failed to load.")
@@ -31,7 +25,32 @@ def run_cost_forecasting(df: pd.DataFrame):
         return
 
     st.title("💰 Cloud Cost Forecast")
-    st.info("Forecasting **total monthly cost** for the next 12 months...")
+    
+    # --- MODEL TUNING CONTROLS ---
+    st.sidebar.header("Forecast Tuning Parameters")
+    
+    # Allows tuning the trend sensitivity (to fix extreme negative or positive forecasts)
+    changepoint_scale = st.sidebar.slider(
+        'Trend Sensitivity (changepoint_prior_scale)',
+        min_value=0.001, 
+        max_value=0.5, 
+        value=0.001, # Defaulting to a very low value to stabilize aggressive trends
+        step=0.001,
+        help="Lower values make the forecast trend smoother and less likely to swing aggressively (e.g., $17M or $-9M$ predictions). Start low and increase if the forecast is too flat."
+    )
+    
+    # Allows tuning the uncertainty width (to fix collapsed bounds)
+    interval_conf = st.sidebar.slider(
+        'Uncertainty Confidence (interval_width)',
+        min_value=0.70, 
+        max_value=0.99, 
+        value=0.95, 
+        step=0.01,
+        help="Controls the width of the lower/upper bounds. Use 0.95 for 95% confidence intervals."
+    )
+    
+    st.info("Forecasting **total monthly cost** for the next 12 months using tuned parameters...")
+
 
     try:
         # --- MONTHLY DATA PREPARATION ---
@@ -50,20 +69,18 @@ def run_cost_forecasting(df: pd.DataFrame):
             st.error("Not enough historical monthly data (requires at least 2 months) to perform a reliable forecast.")
             return
 
-        # --- TRAIN THE MODEL (WITH FIX) ---
+        # --- TRAIN THE MODEL (WITH DYNAMIC TUNING) ---
         st.markdown(
-            "***Model Tuning Note:*** *The `changepoint_prior_scale` was set to `0.005` to smooth out the trend "
-            "and prevent the large December cost reduction from causing an unrealistic negative forecast. The `interval_width` "
-            "is set to `0.95` to display the $95\%$ confidence bounds.*"
+            f"***Model Tuning Note:*** *The trend sensitivity (`changepoint_prior_scale`) is currently set to **{changepoint_scale}**. "
+            f"The uncertainty confidence (`interval_width`) is set to **{interval_conf}**.*"
         )
         model = Prophet(
             weekly_seasonality=False,
             daily_seasonality=False,
             yearly_seasonality=True,
-            # CRITICAL FIX 1: Reduce sensitivity to late-stage trend changes
-            changepoint_prior_scale=0.005,
-            # CRITICAL FIX 2: Set explicit uncertainty interval width for visible bounds
-            interval_width=0.95
+            # FIXED: Now using the user-defined slider values
+            changepoint_prior_scale=changepoint_scale,
+            interval_width=interval_conf
         )
         model.fit(prophet_df)
 
@@ -72,12 +89,14 @@ def run_cost_forecasting(df: pd.DataFrame):
         forecast = model.predict(future)
 
         st.subheader("Monthly Cost Forecast (Next 1 Year)")
-
+        st.write("The shaded region represents the uncertainty bounds (confidence interval).")
+        
         # Plot using Plotly (works in Streamlit)
         fig1 = plot_plotly(model, forecast)
         st.plotly_chart(fig1, use_container_width=True)
 
         st.subheader("Forecast Component Breakdown")
+        st.write("Review the Trend component to ensure it is not wildly positive or negative.")
         fig2 = model.plot_components(forecast)
         st.pyplot(fig2)  # matplotlib figure
 
@@ -109,7 +128,7 @@ def run_cost_forecasting(df: pd.DataFrame):
             )
         )
 
-        st.success("Monthly forecast analysis complete. The trend and uncertainty bounds should now be stable!")
+        st.success("Monthly forecast analysis complete. Use the sidebar controls to tune the model.")
 
     except Exception as e:
         st.error(f"An error occurred during forecasting: {e}")
