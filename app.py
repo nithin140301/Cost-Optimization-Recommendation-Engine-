@@ -8,8 +8,8 @@ from recommendations import generate_recommendations
 from anomaly_detection import run_anomaly_detection
 from clustering import run_clustering_analysis
 
-# FIX: Correctly importing run_cost_forecasting from the local 'forecast' file
-from forecast import run_cost_forecasting
+# FIX: Correctly importing run_cost_forecasting from the local 'forecast_app' module.
+from forecast_app import run_cost_forecasting
 
 # --- Page Configuration ---
 st.set_page_config(
