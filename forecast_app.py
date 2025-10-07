@@ -128,7 +128,8 @@ def run_cost_forecasting(df: pd.DataFrame):
                 actual_2023 = df_actual_2023.copy()
                 actual_2023['ds'] = actual_2023['Usage Start Date'].dt.to_period('M').dt.start_time
                 actual_2023 = actual_2023.groupby('ds')['Rounded Cost ($)'].sum().reset_index()
-                actual_2030.columns = ['ds', 'Actual Cost']
+                # FIX: Corrected typo from actual_2030.columns to actual_2023.columns
+                actual_2023.columns = ['ds', 'Actual Cost']
                 
                 # Merge predicted and actual costs
                 validation_df = forecast_2023[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].merge(
