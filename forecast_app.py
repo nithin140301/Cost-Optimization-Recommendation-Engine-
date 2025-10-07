@@ -16,12 +16,9 @@ except ImportError:
 def run_cost_forecasting(df: pd.DataFrame):
     """
     Performs cost forecasting specifically for the back-testing scenario:
-    1. Trains on 2022 data ('data_2022.csv').
-    2. Predicts 12 months (for validation against 2023).
-    3. Displays a comparison table of Predicted vs. Actual 2023 costs.
-    
-    NOTE: The 'df' argument passed to this function is ignored, as it loads the
-    training data directly from 'data_2022.csv'.
+    1. Trains on the data passed in 'df' (assumed to be 2022 data).
+    2. Uses a Streamlit file uploader to get the validation data (2023 data).
+    3. Predicts 12 months and displays a comparison table of Predicted vs. Actual 2023 costs.
     """
     if not PROPHET_AVAILABLE:
         st.warning("Cost forecasting requires the 'prophet' library, which is not currently installed or failed to load.")
@@ -30,24 +27,21 @@ def run_cost_forecasting(df: pd.DataFrame):
 
     st.title("💰 Cloud Cost Forecast (Back-Testing: 2022 -> Predict 2023)")
     
-    # --- Data Loading (Train on 2022) ---
-    @st.cache_data
-    def _load_training_data():
-        """Loads and prepares 2022 training data."""
-        try:
-            # Explicitly load data_2022.csv for training
-            df_2022 = pd.read_csv("data_2022.csv")
-            st.sidebar.success("Loaded 'data_2022.csv' for training (Historical Data).")
-            return df_2022
-        except FileNotFoundError as e:
-            st.error(f"Error loading training file: {e}. Ensure 'data_2022.csv' is available.")
-            return pd.DataFrame()
+    # RENAME INPUT DF FOR CLARITY: df is now the 2022 Training Data
+    df_train = df.copy()
 
-    df_train = _load_training_data()
-    
     if df_train.empty:
+        st.warning("The input data (expected 2022 training data) is empty.")
         return
 
+    # --- INPUT FOR VALIDATION DATA (2023) ---
+    st.sidebar.header("Validation Data")
+    uploaded_file_2023 = st.sidebar.file_uploader(
+        "Upload Actual 2023 Data (data_2023.csv)",
+        type=['csv'],
+        help="This file is used to validate the 2023 predictions made by the model trained on 2022 data."
+    )
+    
     # --- MODEL TUNING CONTROLS ---
     st.sidebar.header("Forecast Tuning Parameters")
     
@@ -66,10 +60,10 @@ def run_cost_forecasting(df: pd.DataFrame):
         max_value=0.99, 
         value=0.95, 
         step=0.01,
-        help="Controls the width of the lower/upper bounds (e.g., 0.95 for 95% confidence)."
+        help="Controls the width of the lower/upper bounds. For back-testing, check if the Actual Cost falls within the Lower and Upper Bound."
     )
     
-    st.info("Training model on **2022 data** only. Predicting the **12 months of 2023**.")
+    st.info("Model training on the uploaded 2022 data. Predicting the **12 months of 2023**.")
 
 
     try:
@@ -86,7 +80,7 @@ def run_cost_forecasting(df: pd.DataFrame):
         
         # Ensure enough data
         if len(prophet_df) < 2:
-            st.error("Not enough historical monthly data (requires at least 2 months in 'data_2022.csv') to perform a reliable forecast.")
+            st.error("Not enough historical monthly data (requires at least 2 months) in the 2022 training data to perform a reliable forecast.")
             return
 
         # --- TRAIN THE MODEL (WITH DYNAMIC TUNING) ---
@@ -103,60 +97,63 @@ def run_cost_forecasting(df: pd.DataFrame):
         model.fit(prophet_df)
 
         # --- PREDICTION (12 months of 2023) ---
-        # Predict 12 periods, covering 2023
         future = model.make_future_dataframe(periods=12, freq='M')
         forecast = model.predict(future)
         
         # Filter down to just the 12 forecast months
         forecast_2023 = forecast.tail(12).copy()
-        # Convert date to start of month for clean merging
         forecast_2023['ds'] = forecast_2023['ds'].dt.to_period('M').dt.start_time
 
-        # --- VALIDATION (Load Actual 2023 Data) ---
-        try:
-            # Explicitly load data_2023.csv for validation
-            df_actual_2023 = pd.read_csv("data_2023.csv")
-            df_actual_2023['Usage Start Date'] = pd.to_datetime(df_actual_2023['Usage Start Date'])
-            
-            # Aggregate 2023 actuals by month
-            actual_2023 = df_actual_2023.copy()
-            actual_2023['ds'] = actual_2023['Usage Start Date'].dt.to_period('M').dt.start_time
-            actual_2023 = actual_2023.groupby('ds')['Rounded Cost ($)'].sum().reset_index()
-            actual_2023.columns = ['ds', 'Actual Cost']
-            
-            # Merge predicted and actual costs
-            validation_df = forecast_2023[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].merge(
-                actual_2023, on='ds', how='left'
-            )
-            
-            validation_df.rename(
-                columns={
-                    'ds': 'Date', 
-                    'yhat': 'Predicted Cost', 
-                    'yhat_lower': 'Lower Bound', 
-                    'yhat_upper': 'Upper Bound'
-                },
-                inplace=True
-            )
-            
-            # Calculate the prediction error (absolute difference)
-            validation_df['Error ($)'] = (validation_df['Predicted Cost'] - validation_df['Actual Cost']).abs()
-            
-            st.subheader("Model Validation: Predicted vs. Actual (2023)")
-            st.dataframe(
-                validation_df.style.format(
-                    {'Predicted Cost': '${:,.2f}', 
-                     'Lower Bound': '${:,.2f}', 
-                     'Upper Bound': '${:,.2f}', 
-                     'Actual Cost': '${:,.2f}',
-                     'Error ($)': '${:,.2f}'}
+        # --- VALIDATION (Load Actual 2023 Data from Uploader) ---
+        if uploaded_file_2023 is not None:
+            try:
+                # Load the 2023 validation data from the Streamlit uploader
+                df_actual_2023 = pd.read_csv(uploaded_file_2023)
+                df_actual_2023['Usage Start Date'] = pd.to_datetime(df_actual_2023['Usage Start Date'])
+                
+                # Aggregate 2023 actuals by month
+                actual_2023 = df_actual_2023.copy()
+                actual_2023['ds'] = actual_2023['Usage Start Date'].dt.to_period('M').dt.start_time
+                actual_2023 = actual_2023.groupby('ds')['Rounded Cost ($)'].sum().reset_index()
+                actual_2023.columns = ['ds', 'Actual Cost']
+                
+                # Merge predicted and actual costs
+                validation_df = forecast_2023[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].merge(
+                    actual_2023, on='ds', how='left'
                 )
-            )
-            st.success(f"Validation against 'data_2023.csv' complete. Use the **Trend Sensitivity** slider to minimize the average **Error (\$)**.")
-            
-        except FileNotFoundError:
-            st.warning("Could not load 'data_2023.csv'. Displaying 2023 forecast without actuals for validation.")
-            # Fallback to display the forecast without validation data
+                
+                validation_df.rename(
+                    columns={
+                        'ds': 'Date', 
+                        'yhat': 'Predicted Cost', 
+                        'yhat_lower': 'Lower Bound', 
+                        'yhat_upper': 'Upper Bound'
+                    },
+                    inplace=True
+                )
+                
+                # Calculate the prediction error (absolute difference)
+                validation_df['Error ($)'] = (validation_df['Predicted Cost'] - validation_df['Actual Cost']).abs()
+                
+                st.subheader("Model Validation: Predicted vs. Actual (2023)")
+                st.dataframe(
+                    validation_df.style.format(
+                        {'Predicted Cost': '${:,.2f}', 
+                         'Lower Bound': '${:,.2f}', 
+                         'Upper Bound': '${:,.2f}', 
+                         'Actual Cost': '${:,.2f}',
+                         'Error ($)': '${:,.2f}'}
+                    )
+                )
+                st.success(f"Validation against 2023 data complete. Use the **Trend Sensitivity** slider to minimize the average **Error (\$)**.")
+                
+            except Exception as e:
+                st.error(f"An error occurred while processing the 2023 validation file: {e}")
+                st.warning("Please ensure the uploaded 2023 file has the columns 'Usage Start Date' and 'Rounded Cost ($)'.")
+        
+        else:
+            st.warning("Please upload your **Actual 2023 Data (data_2023.csv)** using the file uploader in the sidebar to perform validation.")
+            # Display forecast table without validation data
             forecast_output = forecast.tail(12)
             st.dataframe(
                 forecast_output[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].rename(
@@ -165,6 +162,7 @@ def run_cost_forecasting(df: pd.DataFrame):
                     {'Predicted Cost': '{:,.2f}', 'Lower Bound': '{:,.2f}', 'Upper Bound': '{:,.2f}'}
                 )
             )
+
 
         # --- VISUALIZATION and Component Breakdown ---
         st.subheader("Forecast Visuals (Trained on 2022, Predicted 2023)")
@@ -180,4 +178,4 @@ def run_cost_forecasting(df: pd.DataFrame):
 
     except Exception as e:
         st.error(f"An error occurred during forecasting: {e}")
-        st.warning("Ensure the 'Usage Start Date' and 'Rounded Cost ($)' columns are present and correctly formatted in 'data_2022.csv'.")
+        st.warning("Ensure the 'Usage Start Date' and 'Rounded Cost ($)' columns are present and correctly formatted in your training data.")
