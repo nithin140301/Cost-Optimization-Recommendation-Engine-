@@ -50,9 +50,9 @@ def run_cost_forecasting(df: pd.DataFrame):
         'Trend Sensitivity (changepoint_prior_scale)',
         min_value=0.001, 
         max_value=0.5, 
-        value=0.001, 
+        value=0.05, # Changed default value to 0.05 for a better starting point.
         step=0.001,
-        help="Lower values make the forecast trend smoother and prevent extreme predictions (like $17M or $-9M$). Use a very low value (e.g., 0.001) for stable trends."
+        help="Controls how flexible the model is when fitting trends. Lower values (e.g., 0.01-0.1) are usually best for stable costs."
     )
     
     interval_conf = st.sidebar.slider(
