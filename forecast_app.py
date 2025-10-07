@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from prophet import Prophet
 from prophet.plot import plot_plotly
+import numpy as np
 
 
 # Check if Prophet is available
@@ -17,12 +18,16 @@ def run_cost_forecasting(df: pd.DataFrame):
     """
     Performs cost forecasting using Facebook Prophet, provided the library is available,
     predicting total monthly cost for the next 12 months.
+    
+    FIX: The changepoint_prior_scale has been reduced to 0.005 to prevent the model
+    from overreacting to the steep $2M cost cut observed in December 2023.
     """
     if not PROPHET_AVAILABLE:
         st.warning("Cost forecasting requires the 'prophet' library, which is not currently installed or failed to load.")
         st.markdown("Please install it to use this feature: `pip install prophet`")
         return
 
+    st.title("💰 Cloud Cost Forecast")
     st.info("Forecasting **total monthly cost** for the next 12 months...")
 
     try:
@@ -42,11 +47,17 @@ def run_cost_forecasting(df: pd.DataFrame):
             st.error("Not enough historical monthly data (requires at least 2 months) to perform a reliable forecast.")
             return
 
-        # --- TRAIN THE MODEL ---
+        # --- TRAIN THE MODEL (WITH FIX) ---
+        st.markdown(
+            "***Model Tuning Note:*** *The `changepoint_prior_scale` was set to `0.005` to smooth out the trend "
+            "and prevent the large December cost reduction from causing an unrealistic negative forecast.*"
+        )
         model = Prophet(
             weekly_seasonality=False,
             daily_seasonality=False,
-            yearly_seasonality=True
+            yearly_seasonality=True,
+            # CRITICAL FIX: Reduce sensitivity to late-stage trend changes
+            changepoint_prior_scale=0.005 
         )
         model.fit(prophet_df)
 
@@ -66,15 +77,33 @@ def run_cost_forecasting(df: pd.DataFrame):
 
         # Display key figures
         last_month_cost = forecast.iloc[-1]['yhat']
-        st.metric(
-            label="Predicted Cost 12 Months Out (Monthly Total)",
-            value=f"${last_month_cost:,.2f}",
-            delta="Based on trends, prepare for this monthly total cost."
+        
+        # Calculate the trend component for the last forecast month (for verification)
+        last_trend = forecast.iloc[-1]['trend']
+        
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        col1.metric(
+            label="Predicted Monthly Cost (12 Months Out)",
+            value=f"${last_month_cost:,.0f}"
+        )
+        col2.metric(
+            label="Projected Trend Component (12 Months Out)",
+            value=f"${last_trend:,.0f}"
+        )
+        st.markdown("---")
+
+
+        st.dataframe(
+            forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper', 'trend']].tail(13).rename(
+                columns={'ds': 'Date', 'yhat': 'Predicted Cost', 'yhat_lower': 'Lower Bound', 'yhat_upper': 'Upper Bound', 'trend': 'Trend Component'}
+            ).style.format(
+                {'Predicted Cost': '{:,.2f}', 'Lower Bound': '{:,.2f}', 'Upper Bound': '{:,.2f}', 'Trend Component': '{:,.2f}'}
+            )
         )
 
-        st.dataframe(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(13))
-
-        st.success("Monthly forecast analysis complete.")
+        st.success("Monthly forecast analysis complete. The trend should now be stable!")
 
     except Exception as e:
         st.error(f"An error occurred during forecasting: {e}")
