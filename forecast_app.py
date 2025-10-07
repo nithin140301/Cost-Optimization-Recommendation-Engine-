@@ -19,8 +19,11 @@ def run_cost_forecasting(df: pd.DataFrame):
     Performs cost forecasting using Facebook Prophet, provided the library is available,
     predicting total monthly cost for the next 12 months.
     
-    FIX: The changepoint_prior_scale has been reduced to 0.005 to prevent the model
+    FIX 1: The changepoint_prior_scale has been reduced to 0.005 to prevent the model
     from overreacting to the steep $2M cost cut observed in December 2023.
+    
+    FIX 2: The interval_width is set to 0.95 to ensure the uncertainty bounds (yhat_lower/upper) 
+    are visible and not collapsed onto the prediction line.
     """
     if not PROPHET_AVAILABLE:
         st.warning("Cost forecasting requires the 'prophet' library, which is not currently installed or failed to load.")
@@ -50,14 +53,17 @@ def run_cost_forecasting(df: pd.DataFrame):
         # --- TRAIN THE MODEL (WITH FIX) ---
         st.markdown(
             "***Model Tuning Note:*** *The `changepoint_prior_scale` was set to `0.005` to smooth out the trend "
-            "and prevent the large December cost reduction from causing an unrealistic negative forecast.*"
+            "and prevent the large December cost reduction from causing an unrealistic negative forecast. The `interval_width` "
+            "is set to `0.95` to display the $95\%$ confidence bounds.*"
         )
         model = Prophet(
             weekly_seasonality=False,
             daily_seasonality=False,
             yearly_seasonality=True,
-            # CRITICAL FIX: Reduce sensitivity to late-stage trend changes
-            changepoint_prior_scale=0.005 
+            # CRITICAL FIX 1: Reduce sensitivity to late-stage trend changes
+            changepoint_prior_scale=0.005,
+            # CRITICAL FIX 2: Set explicit uncertainty interval width for visible bounds
+            interval_width=0.95
         )
         model.fit(prophet_df)
 
@@ -103,7 +109,7 @@ def run_cost_forecasting(df: pd.DataFrame):
             )
         )
 
-        st.success("Monthly forecast analysis complete. The trend should now be stable!")
+        st.success("Monthly forecast analysis complete. The trend and uncertainty bounds should now be stable!")
 
     except Exception as e:
         st.error(f"An error occurred during forecasting: {e}")
