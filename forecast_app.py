@@ -5,7 +5,7 @@ from prophet.plot import plot_plotly
 import numpy as np
 
 # Import the anomaly processing function that flags records using Isolation Forest
-from anomaly_processor import flag_anomalous_records
+from anomaly_detection import flag_anomalous_records
 
 # Check if Prophet is available
 try:
