@@ -86,9 +86,17 @@ def run_cost_forecasting(df: pd.DataFrame):
         'Trend Sensitivity (changepoint_prior_scale)',
         min_value=0.001, 
         max_value=0.5, 
-        value=0.50,
+        value=0.01, # Changed default back to 0.01 for stable trend
         step=0.001,
-        help="Controls how flexible the model is when fitting trends. Set high (like 0.50) to stabilize against short-term volatility."
+        help="Controls how flexible the model is when fitting trends. **Start low (like 0.01) for stable predictions.** Setting it too high (near 0.5) can lead to aggressive, unrealistic forecasts."
+    )
+    
+    # NEW: Seasonality Mode Control
+    seasonality_mode = st.sidebar.radio(
+        'Seasonality Mode',
+        ['additive', 'multiplicative'],
+        index=1, # Defaulting to multiplicative now to fix negative predictions
+        help="Controls how seasonality (monthly spikes/dips) is applied. 'Additive' works well for stable data; **'Multiplicative' works better for cost data where fluctuations grow with the base cost.**"
     )
 
     # Manual Changepoint control 
@@ -157,6 +165,7 @@ def run_cost_forecasting(df: pd.DataFrame):
             yearly_seasonality=True,
             changepoint_prior_scale=changepoint_scale,
             interval_width=interval_conf,
+            seasonality_mode=seasonality_mode, # <-- This is the crucial addition!
             changepoints=changepoint_list if changepoint_list else None 
         )
         model.fit(prophet_df)
