@@ -68,41 +68,22 @@ def run_cost_forecasting(df: pd.DataFrame):
     st.subheader("Cross-Validation & Performance Metrics")
     st.markdown("This performs time-series cross-validation to evaluate forecast accuracy.")
 
-   # --- Prophet Cross-Validation ---
-st.subheader("Cross-Validation & Performance Metrics")
-st.markdown("This performs time-series cross-validation to evaluate forecast accuracy.")
-
-try:
-    # Run cross-validation
-    df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
-    
-    st.markdown("**Full Cross-Validation Table:**")
-    st.dataframe(df_cv, use_container_width=True)  # Display full table
-
-   # --- Prophet Cross-Validation (after forecast plots) ---
-st.subheader("Cross-Validation & Performance Metrics")
-st.markdown("This performs time-series cross-validation to evaluate forecast accuracy.")
-
-try:
-    # Only run CV if there is enough data
-    if len(prophet_df) < 6:  # Require at least ~6 months for CV
-        st.info("Not enough historical data to perform cross-validation (need at least 6 months).")
-    else:
+    try:
         # Run cross-validation
         df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
-
-        st.markdown("**Full Cross-Validation Table:**")
-        st.dataframe(df_cv, use_container_width=True)  # Full table
+        st.markdown("**Cross-validation sample:**")
+        st.dataframe(df_p, use_container_width=True)
 
         # Performance metrics
         df_p = performance_metrics(df_cv)
-        st.markdown("**Performance Metrics:**")
-        st.dataframe(df_p, use_container_width=True)
+        st.markdown("**Performance metrics:**")
+        st.dataframe(df_p.head())
 
         # Plot RMSE over horizon
-        st.markdown("**Cross-Validation Metric Plot (RMSE over horizon):**")
+        st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
         fig = plot_cross_validation_metric(df_cv, metric='rmse')
         st.pyplot(fig)
 
-except Exception as e:
-    st.warning(f"Cross-validation could not be performed: {e}")
+    except Exception as e:
+        st.warning(f"Cross-validation could not be performed: {e}")
+        st.info("Cross-validation requires sufficient historical data (at least ~6 months).")
