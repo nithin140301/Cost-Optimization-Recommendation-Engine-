@@ -77,7 +77,7 @@ def run_cost_forecasting(df: pd.DataFrame):
         # Performance metrics
         df_p = performance_metrics(df_cv)
         st.markdown("**Performance metrics:**")
-        st.dataframe(df_p.head())
+        st.dataframe(df_p())
 
         # Plot RMSE over horizon
         st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
