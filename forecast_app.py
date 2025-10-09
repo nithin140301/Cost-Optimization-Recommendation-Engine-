@@ -2,27 +2,25 @@ import streamlit as st
 import pandas as pd
 from prophet import Prophet
 from prophet.plot import plot_plotly
+from prophet.diagnostics import cross_validation, performance_metrics
+from prophet.plot import plot_cross_validation_metric
 
 def run_cost_forecasting(df: pd.DataFrame):
     """
-    Forecast future costs using Prophet.
-    Automatically picks 'Usage Start Date' and 'Rounded Cost ($)' columns from the uploaded dataframe.
+    Forecast future costs using Prophet, including cross-validation and performance metrics.
     """
-
     st.subheader("Cost Forecasting (Next 12 Months)")
 
-    # --- Check required columns exist ---
     required_cols = ['Usage Start Date', 'Rounded Cost ($)']
     if not all(col in df.columns for col in required_cols):
         st.error(f"The dataset must contain the following columns: {', '.join(required_cols)}")
         return
 
-    # --- Extract relevant columns and rename ---
+    # --- Prepare data ---
     prophet_df = df[['Usage Start Date', 'Rounded Cost ($)']].copy()
     prophet_df.rename(columns={'Usage Start Date': 'ds', 'Rounded Cost ($)': 'y'}, inplace=True)
     prophet_df['ds'] = pd.to_datetime(prophet_df['ds'])
 
-    # --- Aggregate monthly ---
     prophet_df['ds'] = prophet_df['ds'].dt.to_period('M').dt.start_time
     prophet_df = prophet_df.groupby('ds')['y'].sum().reset_index()
 
@@ -38,7 +36,6 @@ def run_cost_forecasting(df: pd.DataFrame):
     future_dates = model.make_future_dataframe(periods=12, freq='MS')
     prediction = model.predict(future_dates)
 
-    # --- Filter only future months ---
     last_historical = prophet_df['ds'].max()
     forecast_period = prediction[prediction['ds'] > last_historical].copy()
     forecast_period['ds'] = forecast_period['ds'].dt.to_period('M').dt.start_time
@@ -60,11 +57,33 @@ def run_cost_forecasting(df: pd.DataFrame):
         use_container_width=True
     )
 
-    # --- Forecast Plot ---
+    # --- Forecast Plots ---
     st.subheader("Forecast Plot")
-    fig1 = plot_plotly(model, prediction)
-    st.plotly_chart(fig1, use_container_width=True)
+    st.plotly_chart(plot_plotly(model, prediction), use_container_width=True)
 
-    # --- Forecast Components ---
     st.subheader("Forecast Components")
     st.pyplot(model.plot_components(prediction))
+
+    # --- Prophet Cross-Validation ---
+    st.subheader("Cross-Validation & Performance Metrics")
+    st.markdown("This performs time-series cross-validation to evaluate forecast accuracy.")
+
+    try:
+        # Run cross-validation
+        df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
+        st.markdown("**Cross-validation sample:**")
+        st.dataframe(df_cv.head())
+
+        # Performance metrics
+        df_p = performance_metrics(df_cv)
+        st.markdown("**Performance metrics:**")
+        st.dataframe(df_p.head())
+
+        # Plot RMSE over horizon
+        st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
+        fig = plot_cross_validation_metric(df_cv, metric='rmse')
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.warning(f"Cross-validation could not be performed: {e}")
+        st.info("Cross-validation requires sufficient historical data (at least ~6 months).")
