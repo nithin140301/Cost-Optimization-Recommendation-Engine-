@@ -68,22 +68,27 @@ def run_cost_forecasting(df: pd.DataFrame):
     st.subheader("Cross-Validation & Performance Metrics")
     st.markdown("This performs time-series cross-validation to evaluate forecast accuracy.")
 
-    try:
-        # Run cross-validation
-        df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
-        st.markdown("**Cross-validation sample:**")
-        st.dataframe(df_cv.head())
+   # --- Prophet Cross-Validation ---
+st.subheader("Cross-Validation & Performance Metrics")
+st.markdown("This performs time-series cross-validation to evaluate forecast accuracy.")
 
-        # Performance metrics
-        df_p = performance_metrics(df_cv)
-        st.markdown("**Performance metrics:**")
-        st.dataframe(df_p.head())
+try:
+    # Run cross-validation
+    df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
+    
+    st.markdown("**Full Cross-Validation Table:**")
+    st.dataframe(df_cv, use_container_width=True)  # Display full table
 
-        # Plot RMSE over horizon
-        st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
-        fig = plot_cross_validation_metric(df_cv, metric='rmse')
-        st.pyplot(fig)
+    # Performance metrics
+    df_p = performance_metrics(df_cv)
+    st.markdown("**Performance Metrics:**")
+    st.dataframe(df_p, use_container_width=True)
 
-    except Exception as e:
-        st.warning(f"Cross-validation could not be performed: {e}")
-        st.info("Cross-validation requires sufficient historical data (at least ~6 months).")
+    # Plot RMSE over horizon
+    st.markdown("**Cross-Validation Metric Plot (RMSE over horizon):**")
+    fig = plot_cross_validation_metric(df_cv, metric='rmse')
+    st.pyplot(fig)
+
+except Exception as e:
+    st.warning(f"Cross-validation could not be performed: {e}")
+    st.info("Cross-validation requires sufficient historical data (at least ~6 months).")
