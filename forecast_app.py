@@ -72,12 +72,12 @@ def run_cost_forecasting(df: pd.DataFrame):
         # Run cross-validation
         df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
         st.markdown("**Cross-validation sample:**")
-        st.dataframe(df_p, use_container_width=True)
+        st.dataframe(df_cv.head())
 
         # Performance metrics
         df_p = performance_metrics(df_cv)
         st.markdown("**Performance metrics:**")
-        st.dataframe(df_p())
+        st.dataframe(df_p.head())
 
         # Plot RMSE over horizon
         st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
