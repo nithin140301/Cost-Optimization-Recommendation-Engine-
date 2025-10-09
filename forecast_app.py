@@ -72,7 +72,7 @@ def run_cost_forecasting(df: pd.DataFrame):
         # Run cross-validation
         df_cv = cross_validation(model, initial='180 days', period='90 days', horizon='180 days', parallel="processes")
         st.markdown("**Cross-validation sample:**")
-        st.dataframe(df_cv.head())
+        st.dataframe(df_cv)
 
         # Performance metrics
         df_p = performance_metrics(df_cv)
