@@ -185,11 +185,11 @@ def run_cost_forecasting(df: pd.DataFrame):
         st.markdown("**Overall Performance Metrics (Averaged over the single run):**")
         st.dataframe(df_p)
 
-        # Plot RMSE over horizon
-        st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
-        fig_rmse = plot_cross_validation_metric(df_cv, metric='rmse')
-        st.pyplot(fig_rmse)
-        plt.close(fig_rmse) # Close the figure to free memory
+        # # Plot RMSE over horizon
+        # st.markdown("**Cross-validation metric plot (RMSE over horizon):**")
+        # fig_rmse = plot_cross_validation_metric(df_cv, metric='rmse')
+        # st.pyplot(fig_rmse)
+        # plt.close(fig_rmse) # Close the figure to free memory
 
     except Exception as e:
         st.warning(f"Cross-validation could not be performed: {e}")
