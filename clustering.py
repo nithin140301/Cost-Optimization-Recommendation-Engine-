@@ -133,27 +133,24 @@ import numpy as np
 def run_clustering_analysis(df):
     """
     Performs K-Means clustering on Cost, Utilization, and Quantity to segment workloads.
+    High Priority Waste is dynamically assigned based on high cost + low utilization.
     """
-
     st.subheader("📊 Workload Segmentation using K-Means Clustering")
     st.markdown(
         "Clustering helps group resources with similar spending and usage patterns. "
         "We cluster based on **Total Cost**, **Usage Quantity**, and **Average Utilization**."
     )
 
-    # Select features for clustering
     features = ['Unrounded Cost ($)', 'Usage Quantity', 'Avg Utilization (%)']
 
-    # Filter out rows with zero cost or usage quantity, as they skew the data
-    # Also, ensure we drop any rows that resulted in NaN/Inf in previous steps (like anomaly detection)
+    # Filter out rows with zero cost or usage quantity
     cluster_df = df[(df['Unrounded Cost ($)'] > 0) & (df['Usage Quantity'] > 0)].copy()
 
-    # Clean data before scaling
+    # Clean data: replace inf with NaN and drop NaNs
     for col in features:
         if col in cluster_df.columns:
             cluster_df[col].replace([np.inf, -np.inf], np.nan, inplace=True)
     cluster_df.dropna(subset=features, inplace=True)
-
 
     if cluster_df.shape[0] < 5:
         st.warning("Not enough data points with non-zero cost/usage to perform meaningful clustering.")
@@ -167,46 +164,37 @@ def run_clustering_analysis(df):
 
     # 2. Perform K-Means Clustering
     K = 4
-    # The fix for KMeans warning: n_init is automatically set to 'auto' in recent sklearn versions
-    kmeans = KMeans(n_clusters=K, random_state=42, n_init='auto') 
+    kmeans = KMeans(n_clusters=K, random_state=42, n_init='auto')
     cluster_df['Cluster_ID'] = kmeans.fit_predict(X_scaled)
 
-
-    # 3. Assign Descriptive Cluster Names (The Fix is here!)
-
-    # Calculate mean values for each cluster to profile them
+    # 3. Profile Clusters
     profile = cluster_df.groupby('Cluster_ID')[features].mean()
 
-    # We want a high score for optimization candidates (High Cost, Low Util)
-
-    # Rank by Cost (descending: high cost = rank 1)
+    # Weighted Optimization Score (high cost + low utilization = more waste)
     profile['Cost_Rank'] = profile['Unrounded Cost ($)'].rank(ascending=False)
-
-    # Rank by Utilization (ascending: low util = rank 1)
     profile['Util_Rank'] = profile['Avg Utilization (%)'].rank(ascending=True)
+    profile['Optimization_Score'] = 0.7 * profile['Cost_Rank'] + 0.3 * profile['Util_Rank']
 
-    # Optimization Score: The most wasteful cluster will have low rank numbers (e.g., 1+1=2)
-    profile['Optimization_Score'] = profile['Cost_Rank'] + profile['Util_Rank']
+    # Alternative: dynamic "Waste_Score" for absolute high cost & low utilization
+    profile['Waste_Score'] = (profile['Unrounded Cost ($)'] / profile['Unrounded Cost ($)'].max()) \
+                             - (profile['Avg Utilization (%)'] / profile['Avg Utilization (%)'].max())
 
-    # 🛑 FIX APPLIED HERE: Sort by Optimization Score in ASCENDING order.
-    # The LOWEST score (e.g., 2) now correctly points to the MOST wasteful cluster.
-    profile = profile.sort_values('Optimization_Score', ascending=True).reset_index()
+    # Identify High Priority Waste cluster
+    wasteful_cluster_id = profile['Waste_Score'].idxmax()
 
-    # Define names based on the score ranking
-    cluster_names = {
-        profile.loc[0, 'Cluster_ID']: "**1. High Priority Waste (Rightsizing Target)**", # Now correctly the cluster with the lowest score
-        profile.loc[1, 'Cluster_ID']: "2. Moderate Efficiency Concern",
-        profile.loc[2, 'Cluster_ID']: "3. Stable/Efficient Workload",
-        profile.loc[3, 'Cluster_ID']: "4. Low Cost/Low Priority",  # Highest Score
-    }
+    # Assign descriptive names
+    cluster_names = {}
+    for idx, row in profile.iterrows():
+        if row.name == wasteful_cluster_id:
+            cluster_names[row.name] = "**1. High Priority Waste (Rightsizing Target)**"
+        else:
+            cluster_names[row.name] = f"{idx+2}. Other Workload Segment"
 
-    # Map the descriptive names back to the main DataFrame
     cluster_df['Cluster'] = cluster_df['Cluster_ID'].map(cluster_names)
 
     st.success(f"Clustering complete with K={K} workload segments.")
 
     # 4. Visualization
-    # Define a target column for the bubble size (e.g., Total Cost)
     cluster_df['Size_Metric'] = cluster_df['Unrounded Cost ($)'] / cluster_df['Unrounded Cost ($)'].max() * 50
 
     fig = px.scatter_3d(
@@ -226,20 +214,18 @@ def run_clustering_analysis(df):
     st.subheader("Cluster Profiles")
     cluster_summary = cluster_df.groupby('Cluster')[features].mean()
     cluster_summary['Resource Count'] = cluster_df['Cluster'].value_counts()
-
-    # Clean up the output dataframe
     cluster_summary = cluster_summary.sort_values('Unrounded Cost ($)', ascending=False).round(2)
     cluster_summary.index.name = "Workload Segment"
-
     st.dataframe(cluster_summary)
 
     st.markdown(
-        "**Actionable Insights:** Focus your efforts on the **High Priority Waste** segment. Resources in these clusters "
-        "have the highest combined cost and lowest utilization, making them prime candidates for immediate rightsizing or termination."
+        "**Actionable Insights:** Focus your efforts on the **High Priority Waste** segment. "
+        "Resources in this cluster have the highest combined cost and lowest utilization, "
+        "making them prime candidates for immediate rightsizing or termination."
     )
 
-    # Add a quick peek at the most wasteful resources
-    wasteful_cluster_name = cluster_names[profile.loc[0, 'Cluster_ID']]
+    # 6. Top wasteful resources
+    wasteful_cluster_name = cluster_names[wasteful_cluster_id]
     wasteful_resources = cluster_df[cluster_df['Cluster'] == wasteful_cluster_name].sort_values(
         'Unrounded Cost ($)', ascending=False
     ).head(10)
