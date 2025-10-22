@@ -25,7 +25,7 @@ def render_main_app():
     # The forecasting tab will prompt for its specific data files (data_2022.csv, data_2023.csv).
     st.sidebar.header("Main Data Upload (For Recommendations, Anomaly, Clustering)")
     uploaded_file = st.sidebar.file_uploader(
-        "Upload your primary cloud usage CSV file (e.g., data2.csv)",
+        "Upload your primary cloud usage CSV file",
         type=["csv"]
     )
 
@@ -86,7 +86,7 @@ def render_main_app():
 
     else:
         # Prompt user to upload data
-        st.info("Please upload your cloud usage CSV file (e.g., `data2.csv`) in the sidebar to begin analysis.")
+        st.info("Please upload your cloud usage CSV file in the sidebar to begin analysis.")
         # Only pop 'df' if no file is uploaded to avoid unnecessary processing after a file is removed
         st.session_state.pop('df', None)
 
